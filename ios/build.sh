@@ -213,10 +213,6 @@ function update2Revision() {
         sync "$1"
     fi
 
-    # Inject the new libWebRTC_objc target magic
-    if [ "$WEBRTC_TARGET" == "libWebRTC_objc" ] ; then
-        twiddle_objc_target
-    fi
     echo "-- webrtc has been successfully updated"
 }
 
@@ -261,10 +257,15 @@ function twiddle_objc_target () {
     echo "$PROJECT_DIR/insert_two_lines_after_text.py"
     python "$PROJECT_DIR/insert_two_lines_after_text.py"  "$WEBRTC/src/webrtc/webrtc_examples.gyp"
     patch_legacy_objc_api_gyp
+    patch_opensslstreamadapter
 }
 
-function patch_legacy_objc_api_gyp () {
+function patch_legacy_objc_api_gyp() {
     sed -i '' -E "s/\'objc\/RTCLogging\.mm\',//" "$WEBRTC/src/talk/app/webrtc/legacy_objc_api.gyp"
+}
+
+function patch_opensslstreamadapter() {
+    perl -pi -e 's/(#ifndef OPENSSL_IS_BORINGSSL\n)/\1#include <openssl\/ssl.h>\n/s' "$WEBRTC/src/webrtc/base/opensslstreamadapter.cc"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
