@@ -6,6 +6,8 @@
 #  Created by Rahul Behera on 6/18/14.
 #  Copyright (c) 2014 Pristine, Inc. All rights reserved.
 
+set -e
+
 # Get location of the script itself .. thanks SO ! http://stackoverflow.com/a/246128
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
@@ -235,17 +237,19 @@ function sync() {
     cd "$WEBRTC"
     choose_code_signing
 
-    if [ "$WEBRTC_TARGET" == "libWebRTC_objc" ] ; then
-        twiddle_objc_target
-      else
-        untwiddle_objc_target
-    fi
+    cd "$WEBRTC/src"
+    git reset --hard
+    cd -
 
     if [ -z $1 ]
     then
-        gclient sync --with_branch_heads || true
+        gclient sync --with_branch_heads
     else
-        gclient sync -r "$1" --with_branch_heads || true
+        gclient sync -r "$1" --with_branch_heads
+    fi
+
+    if [ "$WEBRTC_TARGET" == "libWebRTC_objc" ] ; then
+        twiddle_objc_target
     fi
 }
 
@@ -255,17 +259,11 @@ function twiddle_objc_target () {
     echo "Adding a new libWebRTC_objc target"
     echo "$PROJECT_DIR/insert_two_lines_after_text.py"
     python "$PROJECT_DIR/insert_two_lines_after_text.py"  "$WEBRTC/src/webrtc/webrtc_examples.gyp"
+    patch_legacy_objc_api_gyp
 }
 
-function untwiddle_objc_target () {
-    cd "$WEBRTC/src"
-
-    file_changed=`git status --porcelain webrtc/webrtc_examples.gyp | awk '/^ M/{ print $2 }'`
-
-    if [ "$file_changed" == "webrtc/webrtc_examples.gyp" ] ; then
-        echo "Untwiddling the libWebRTC_objc target"
-        git checkout -- webrtc/webrtc_examples.gyp
-    fi
+function patch_legacy_objc_api_gyp () {
+    sed -i '' -E "s/\'objc\/RTCLogging\.mm\',//" "$WEBRTC/src/talk/app/webrtc/legacy_objc_api.gyp"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
