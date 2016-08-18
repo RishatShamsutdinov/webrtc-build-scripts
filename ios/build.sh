@@ -239,7 +239,7 @@ function sync() {
 
     cd "$WEBRTC/src"
     git reset --hard
-    local commit=`git log --grep='master@{#$1}' | grep -oE 'commit .+' | sed -e 's/commit //'`
+    local commit=`git log --grep="master@{#$1}" | grep -oE 'commit .+' | sed -e 's/commit //'`
     cd -
 
     if [ -z $1 ]
