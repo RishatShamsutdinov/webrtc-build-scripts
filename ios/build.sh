@@ -134,7 +134,7 @@ function wrX86() {
 # Add the iOS Simulator X64 specific defines on top of the base
 function wrX86_64() {
     wrbase
-    export GYP_DEFINES="$GYP_DEFINES OS=ios target_arch=x64 target_subarch=arm64"
+    export GYP_DEFINES="$GYP_DEFINES OS=ios target_arch=x64 target_subarch=arm64 msan=1"
     export GYP_GENERATOR_FLAGS="output_dir=out_ios_x86_64"
 }
 
