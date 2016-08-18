@@ -239,13 +239,14 @@ function sync() {
 
     cd "$WEBRTC/src"
     git reset --hard
+    local commit=`git log --grep='master@{#$1}' | grep -oE 'commit .+' | sed -e 's/commit //'`
     cd -
 
     if [ -z $1 ]
     then
         gclient sync --with_branch_heads
     else
-        gclient sync -r "$1" --with_branch_heads
+        gclient sync -r "$commit" --with_branch_heads
     fi
 
     if [ "$WEBRTC_TARGET" == "libWebRTC_objc" ] ; then
