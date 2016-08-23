@@ -44,6 +44,7 @@ function exec_strip() {
 
 function exec_ninja() {
   echo "Running ninja"
+  ninja -C $1 -t clean
   ninja -C $1 $WEBRTC_TARGET
 }
 
@@ -234,8 +235,11 @@ function sync() {
     choose_code_signing
 
     cd "$WEBRTC/src"
-    git reset --hard
+    
+    gclient revert
+    
     local commit=`git log --grep="master@{#$1}" | grep -oE 'commit .+' | sed -e 's/commit //'`
+    
     cd -
 
     if [ -z $1 ]
@@ -258,6 +262,8 @@ function twiddle_objc_target () {
     python "$PROJECT_DIR/insert_two_lines_after_text.py"  "$WEBRTC/src/webrtc/webrtc_examples.gyp"
     patch_legacy_objc_api_gyp
     patch_opensslstreamadapter
+    patch_usrsctp_gyp
+    patch_libsrtp_gyp
 }
 
 function patch_legacy_objc_api_gyp() {
@@ -266,6 +272,14 @@ function patch_legacy_objc_api_gyp() {
 
 function patch_opensslstreamadapter() {
     perl -pi -e 's/(#ifndef OPENSSL_IS_BORINGSSL\n)/\1#include <openssl\/ssl.h>\n/s' "$WEBRTC/src/webrtc/base/opensslstreamadapter.cc"
+}
+
+function patch_usrsctp_gyp() {
+    perl -0777 -pi -e "s/(\s*)('dependencies'\s*:\s*\[\s*)('<\(DEPTH\)\/third_party\/boringssl\/boringssl\.gyp:boringssl',?)(.*?\])/\1'conditions': [['build_ssl==1', { 'dependencies': ['<(DEPTH)\/third_party\/boringssl\/boringssl.gyp:boringssl',] }, { 'include_dirs': ['<(ssl_root)',] }]],\1\2\4/sg" "$WEBRTC/src/third_party/usrsctp/usrsctp.gyp"
+}
+
+function patch_libsrtp_gyp() {
+    perl -0777 -pi -e "s/(\s*)('dependencies'\s*:\s*\[\s*)('<\(DEPTH\)\/third_party\/boringssl\/boringssl\.gyp:boringssl',?)(.*?\])/\1'conditions': [['build_ssl==1', { 'dependencies': ['<(DEPTH)\/third_party\/boringssl\/boringssl.gyp:boringssl',] }, { 'include_dirs': ['<(ssl_root)',] }]],\1\2\4/sg" "$WEBRTC/src/third_party/libsrtp/libsrtp.gyp"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
