@@ -237,7 +237,7 @@ function sync() {
     cd "$WEBRTC/src"
     
     gclient revert
-    
+
     local commit=`git log --grep="master@{#$1}" | grep -oE 'commit .+' | sed -e 's/commit //'`
     
     cd -
@@ -250,24 +250,16 @@ function sync() {
     fi
 
     if [ "$WEBRTC_TARGET" == "libWebRTC_objc" ] ; then
-        twiddle_objc_target
+        patch_files
     fi
 }
 
-# Functions to twiddle the libWebRTC_objc target so that we can build the files that we need and exclude socket rocket and such
-function twiddle_objc_target () {
-    cd "$WEBRTC"
-    echo "Adding a new libWebRTC_objc target"
-    echo "$PROJECT_DIR/insert_two_lines_after_text.py"
-    python "$PROJECT_DIR/insert_two_lines_after_text.py"  "$WEBRTC/src/webrtc/webrtc_examples.gyp"
-    patch_legacy_objc_api_gyp
+function patch_files () {
+    echo "Patching files"
+
     patch_opensslstreamadapter
     patch_usrsctp_gyp
     patch_libsrtp_gyp
-}
-
-function patch_legacy_objc_api_gyp() {
-    sed -i '' -E "s/\'objc\/RTCLogging\.mm\',//" "$WEBRTC/src/talk/app/webrtc/legacy_objc_api.gyp"
 }
 
 function patch_opensslstreamadapter() {
@@ -275,18 +267,28 @@ function patch_opensslstreamadapter() {
 }
 
 function patch_usrsctp_gyp() {
-    perl -0777 -pi -e "s/(\s*)('dependencies'\s*:\s*\[\s*)('<\(DEPTH\)\/third_party\/boringssl\/boringssl\.gyp:boringssl',?)(.*?\])/\1'conditions': [['build_ssl==1', { 'dependencies': ['<(DEPTH)\/third_party\/boringssl\/boringssl.gyp:boringssl',] }, { 'include_dirs': ['<(ssl_root)',] }]],\1\2\4/sg" "$WEBRTC/src/third_party/usrsctp/usrsctp.gyp"
+    patch_gyp "$WEBRTC/src/third_party/usrsctp/usrsctp.gyp"
 }
 
 function patch_libsrtp_gyp() {
-    perl -0777 -pi -e "s/(\s*)('dependencies'\s*:\s*\[\s*)('<\(DEPTH\)\/third_party\/boringssl\/boringssl\.gyp:boringssl',?)(.*?\])/\1'conditions': [['build_ssl==1', { 'dependencies': ['<(DEPTH)\/third_party\/boringssl\/boringssl.gyp:boringssl',] }, { 'include_dirs': ['<(ssl_root)',] }]],\1\2\4/sg" "$WEBRTC/src/third_party/libsrtp/libsrtp.gyp"
+    patch_gyp "$WEBRTC/src/third_party/libsrtp/libsrtp.gyp"
+}
+
+function patch_gyp() {
+    local gyp_path="$1"
+
+    cd `dirname -- "$gyp_path"`
+    git checkout -- `basename -- "$gyp_path"`
+    cd -
+
+    perl -0777 -pi -e "s/(\s*)('dependencies'\s*:\s*\[\s*)('<\(DEPTH\)\/third_party\/boringssl\/boringssl\.gyp:boringssl',?)(.*?\])/\1'conditions': [['build_ssl==1', { 'dependencies': ['<(DEPTH)\/third_party\/boringssl\/boringssl.gyp:boringssl',] }, { 'include_dirs': ['<(ssl_root)',] }]],\1\2\4/sg" "$gyp_path"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
 function copy_headers() {
     if [ ! -h "$WEBRTC/headers" ]; then
         create_directory_if_not_found "$BUILD"
-        ln -s "$WEBRTC/src/talk/app/webrtc/objc/public/" "$WEBRTC/headers" || true
+        ln -s "$WEBRTC/src/webrtc/sdk/objc/Framework/Headers" "$WEBRTC/headers" || true
     fi
 }
 
@@ -325,17 +327,25 @@ function build_webrtc_mac() {
     fi
 }
 
+function prepare_for_ios_build() {
+    choose_code_signing
+    gclient runhooks
+
+    cp -f "$PROJECT_DIR/libWebRTC.gyp" "libWebRTC.gyp"
+    python "webrtc/build/gyp_webrtc.py" "libWebRTC.gyp"
+
+    copy_headers
+
+    WEBRTC_REVISION=`get_revision_number`
+}
+
 # Build AppRTC Demo for the simulator (ia32 architecture)
 function build_apprtc_sim() {
     cd "$WEBRTC/src"
 
     wrX86
-    choose_code_signing
-    gclient runhooks
+    prepare_for_ios_build
 
-    copy_headers
-
-    WEBRTC_REVISION=`get_revision_number`
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_x86/Debug-iphonesimulator/"
         exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Debug.a" "$WEBRTC"/src/out_ios_x86/Debug-iphonesimulator/*.a
@@ -358,12 +368,8 @@ function build_apprtc_sim64() {
     cd "$WEBRTC/src"
 
     wrX86_64
-    choose_code_signing
-    gclient runhooks
+    prepare_for_ios_build
 
-    copy_headers
-
-    WEBRTC_REVISION=`get_revision_number`
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_x86_64/Debug-iphonesimulator/"
         exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Debug.a" "$WEBRTC"/src/out_ios_x86_64/Debug-iphonesimulator/*.a
@@ -386,12 +392,8 @@ function build_apprtc() {
     cd "$WEBRTC/src"
 
     wrios_armv7
-    choose_code_signing
-    gclient runhooks
+    prepare_for_ios_build
 
-    copy_headers
-
-    WEBRTC_REVISION=`get_revision_number`
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_armeabi_v7a/Debug-iphoneos/"
         exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Debug.a" "$WEBRTC"/src/out_ios_armeabi_v7a/Debug-iphoneos/*.a
@@ -415,12 +417,8 @@ function build_apprtc_arm64() {
     cd "$WEBRTC/src"
 
     wrios_armv8
-    choose_code_signing
-    gclient runhooks
+    prepare_for_ios_build
 
-    copy_headers
-
-    WEBRTC_REVISION=`get_revision_number`
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_arm64_v8a/Debug-iphoneos/"
         exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Debug.a" "$WEBRTC"/src/out_ios_arm64_v8a/Debug-iphoneos/*.a
