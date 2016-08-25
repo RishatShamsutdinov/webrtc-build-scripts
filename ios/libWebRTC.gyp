@@ -18,6 +18,9 @@
           'export_dependent_settings': [
             '<(webrtc_root)/sdk/sdk.gyp:rtc_sdk_peerconnection_objc',
           ],
+          'xcode_settings': {
+            'CLANG_ENABLE_OBJC_ARC': 'YES',
+          },
         },
       ],  # targets
     }],  # OS=="ios" or (OS=="mac" and mac_deployment_target=="10.7")
