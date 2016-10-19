@@ -22,8 +22,10 @@ DEFAULT_POD_URL="https://s3.amazonaws.com/libjingle"
 WEBRTC="$PROJECT_DIR/webrtc"
 DEPOT_TOOLS="$PROJECT_DIR/depot_tools"
 BUILD="$WEBRTC/libjingle_peerconnection_builds"
-WEBRTC_TARGET="libWebRTC_objc"
+WEBRTC_TARGET="rtc_sdk_objc"
 MAC_SDK="10.11"
+SHOULD_PULL_TOOLS=true
+OUT_LIB_REL_PATH="obj/webrtc/sdk/lib$WEBRTC_TARGET.a"
 
 function create_directory_if_not_found() {
     if [ ! -d "$1" ];
@@ -32,18 +34,18 @@ function create_directory_if_not_found() {
     fi
 }
 
-function exec_libtool() {
-  echo "Running libtool"
-  libtool -static -v -o $@
-}
-
 function exec_strip() {
   echo "Running strip"
   strip -S -X $@
 }
 
 function exec_ninja() {
+  echo "Generating target"
+
+  gn gen "$1" --args="$GN_ARGS"
+
   echo "Running ninja"
+
   ninja -C $1 -t clean
   ninja -C $1 $WEBRTC_TARGET
 }
@@ -53,30 +55,33 @@ create_directory_if_not_found "$WEBRTC"
 
 # Update/Get/Ensure the Gclient Depot Tools
 function pull_depot_tools() {
+    if [[ $SHOULD_PULL_TOOLS = true ]]; then
+        SHOULD_PULL_TOOLS=false
 
-    echo Get the current working directory so we can change directories back when done
-    WORKING_DIR=`pwd`
+        echo Get the current working directory so we can change directories back when done
+        WORKING_DIR=`pwd`
 
-    echo If no directory where depot tools should be...
-    if [ ! -d "$DEPOT_TOOLS" ]
-    then
-        echo Make directory for gclient called Depot Tools
-        mkdir -p "$DEPOT_TOOLS"
+        echo If no directory where depot tools should be...
+        if [ ! -d "$DEPOT_TOOLS" ]
+        then
+            echo Make directory for gclient called Depot Tools
+            mkdir -p "$DEPOT_TOOLS"
 
-        echo Pull the depot tools project from chromium source into the depot tools directory
-        git clone "https://chromium.googlesource.com/chromium/tools/depot_tools.git" "$DEPOT_TOOLS"
+            echo Pull the depot tools project from chromium source into the depot tools directory
+            git clone "https://chromium.googlesource.com/chromium/tools/depot_tools.git" "$DEPOT_TOOLS"
 
-    else
+        else
 
-        echo Change directory into the depot tools
-        cd "$DEPOT_TOOLS"
+            echo Change directory into the depot tools
+            cd "$DEPOT_TOOLS"
 
-        echo Pull the depot tools down to the latest
-        git pull
+            echo Pull the depot tools down to the latest
+            git pull
+        fi
+        PATH="$PATH:$DEPOT_TOOLS"
+        echo "Go back to working directory"
+        cd "$WORKING_DIR"
     fi
-    PATH="$PATH:$DEPOT_TOOLS"
-    echo "Go back to working directory"
-    cd "$WORKING_DIR"
 }
 
 function choose_code_signing() {
@@ -100,50 +105,61 @@ function choose_code_signing() {
     fi
 }
 
-# Set the base of the GYP defines, instructing gclient runhooks what to generate
 function wrbase() {
-	export GYP_CROSSCOMPILE=1
-    if [ "$WEBRTC_TARGET" != "AppRTCDemo" ]; then
-        GYP_DEFINES="$GYP_DEFINES chromium_ios_signing=0"
+    local is_debug
+
+    if [[ $$WEBRTC_DEBUG = true ]]; then
+        is_debug=true
+    else
+        is_debug=false
     fi
-    export GYP_GENERATORS="ninja,xcode-ninja"
+
+	export GN_ARGS="$GLOBAL_GN_ARGS is_component_build=false is_debug=$is_debug"
+}
+
+function wrbase_ios() {
+    wrbase
+
+    export GN_ARGS="$GN_ARGS target_os=\"ios\""
 }
 
 # Add the iOS Device specific defines on top of the base
 function wrios_armv7() {
-    wrbase
-    export GYP_DEFINES="$GYP_DEFINES OS=ios target_arch=arm"
-    export GYP_GENERATOR_FLAGS="output_dir=out_ios_armeabi_v7a"
-    export GYP_CROSSCOMPILE=1
+    wrbase_ios
+
+    export GN_ARGS="$GN_ARGS target_cpu=\"arm\""
 }
 
 # Add the iOS ARM 64 Device specific defines on top of the base
 function wrios_armv8() {
-    wrbase
-    export GYP_DEFINES="$GYP_DEFINES OS=ios target_arch=arm64"
-    export GYP_GENERATOR_FLAGS="output_dir=out_ios_arm64_v8a"
-    export GYP_CROSSCOMPILE=1
+    wrbase_ios
+
+    export GN_ARGS="$GN_ARGS target_cpu=\"arm64\""
 }
 
 # Add the iOS Simulator X86 specific defines on top of the base
 function wrX86() {
-    wrbase
-    export GYP_DEFINES="$GYP_DEFINES OS=ios target_arch=ia32"
-    export GYP_GENERATOR_FLAGS="output_dir=out_ios_x86"
+    wrbase_ios
+
+    export GN_ARGS="$GN_ARGS target_cpu=\"x86\""
 }
 
 # Add the iOS Simulator X64 specific defines on top of the base
 function wrX86_64() {
-    wrbase
-    export GYP_DEFINES="$GYP_DEFINES OS=ios target_arch=x64 target_subarch=arm64 msan=1"
-    export GYP_GENERATOR_FLAGS="output_dir=out_ios_x86_64"
+    wrbase_ios
+
+    export GN_ARGS="$GN_ARGS target_cpu=\"x64\""
+
+    if [[ $WEBRTC_DEBUG = false ]]; then
+        export GN_ARGS="$GN_ARGS is_msan=true"
+    fi
 }
 
 # Add the Mac 64 bit intel defines
 function wrMac64() {
     wrbase
-    export GYP_DEFINES="$GYP_DEFINES OS=mac target_arch=x64 mac_sdk=$MAC_SDK"
-    export GYP_GENERATOR_FLAGS="output_dir=out_mac_x86_64"
+
+    export GN_ARGS="$GN_ARGS target_os=\"mac\" target_cpu=\"x64\" mac_sdk_version=\"$MAC_SDK\""
 }
 
 # Gets the revision number of the current WebRTC svn repo on the filesystem
@@ -249,7 +265,7 @@ function sync() {
         gclient sync -r "$commit" --with_branch_heads
     fi
 
-    if [ "$WEBRTC_TARGET" == "libWebRTC_objc" ] ; then
+    if [ "$WEBRTC_TARGET" == "rtc_sdk_objc" ] ; then
         patch_files
     fi
 }
@@ -258,30 +274,26 @@ function patch_files () {
     echo "Patching files"
 
     patch_opensslstreamadapter
-    patch_usrsctp_gyp
-    patch_libsrtp_gyp
+
+    if [[ $WEBRTC_USE_OPENSSL = true ]]; then
+        patch_configs
+    fi
 }
 
 function patch_opensslstreamadapter() {
     perl -pi -e 's/(#ifndef OPENSSL_IS_BORINGSSL\n)/\1#include <openssl\/ssl.h>\n/s' "$WEBRTC/src/webrtc/base/opensslstreamadapter.cc"
 }
 
-function patch_usrsctp_gyp() {
-    patch_gyp "$WEBRTC/src/third_party/usrsctp/usrsctp.gyp"
-}
-
-function patch_libsrtp_gyp() {
-    patch_gyp "$WEBRTC/src/third_party/libsrtp/libsrtp.gyp"
-}
-
-function patch_gyp() {
-    local gyp_path="$1"
-
-    cd `dirname -- "$gyp_path"`
-    git checkout -- `basename -- "$gyp_path"`
-    cd -
-
-    perl -0777 -pi -e "s/(\s*)('dependencies'\s*:\s*\[\s*)('<\(DEPTH\)\/third_party\/boringssl\/boringssl\.gyp:boringssl',?)(.*?\])/\1'conditions': [['build_ssl==1', { 'dependencies': ['<(DEPTH)\/third_party\/boringssl\/boringssl.gyp:boringssl',] }, { 'include_dirs': ['<(ssl_root)',] }]],\1\2\4/sg" "$gyp_path"
+function patch_configs() {
+    perl -0777 -pi -e "s/(\s*rtc_static_library\(\"$WEBRTC_TARGET\"\)\s*{)/\1\nconfigs += [\"\/\/webrtc\/base:openssl_config\"]/sg" "$WEBRTC/src/webrtc/sdk/BUILD.gn"
+    
+    perl -0777 -pi -e "s/(deps\s*=\s*\[\s*\"\/\/third_party\/boringssl\",?\s*\])//sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
+    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/\1\nrtc_ssl_root,/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
+    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/import(\"\/\/webrtc\/build\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
+    
+    perl -0777 -pi -e "s/\"\/\/third_party\/boringssl\:boringssl\",?//sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
+    perl -0777 -pi -e "s/(if\s*\(use_srtp_boringssl\)\s*{)(?=\s*defines)/\1\ninclude_dirs += [ rtc_ssl_root ]/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
+    perl -0777 -pi -e "s/(declare_args\(\))/import(\"\/\/webrtc\/build\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
@@ -302,19 +314,18 @@ function build_webrtc_mac() {
       export MACOSX_DEPLOYMENT_TARGET="$MAC_SDK"
 
       choose_code_signing
-      gclient runhooks
 
       copy_headers
 
       WEBRTC_REVISION=`get_revision_number`
       if [ "$WEBRTC_DEBUG" = true ] ; then
           exec_ninja "out_mac_x86_64/Debug/"
-          exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-mac-x86_64-Debug.a" "$WEBRTC"/src/out_mac_x86_64/Debug/*.a
+          cp -f "$WEBRTC/src/out_mac_x86_64/Debug/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-mac-x86_64-Debug.a"
       fi
 
       if [ "$WEBRTC_RELEASE" = true ] ; then
           exec_ninja "out_mac_x86_64/Release/"
-          exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-mac-x86_64-Release.a" "$WEBRTC"/src/out_mac_x86_64/Release/*.a
+          cp -f "$WEBRTC/src/out_mac_x86_64/Release/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-mac-x86_64-Release.a"
           exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-mac-x86_64-Release.a"
       fi
     else
@@ -329,11 +340,6 @@ function build_webrtc_mac() {
 
 function prepare_for_ios_build() {
     choose_code_signing
-    gclient runhooks
-
-    cp -f "$PROJECT_DIR/libWebRTC.gyp" "libWebRTC.gyp"
-    python "webrtc/build/gyp_webrtc.py" "libWebRTC.gyp"
-
     copy_headers
 
     WEBRTC_REVISION=`get_revision_number`
@@ -348,17 +354,17 @@ function build_apprtc_sim() {
 
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_x86/Debug-iphonesimulator/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Debug.a" "$WEBRTC"/src/out_ios_x86/Debug-iphonesimulator/*.a
+        cp -f "$WEBRTC/src/out_ios_x86/Debug-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Debug.a"
     fi
 
     if [ "$WEBRTC_PROFILE" = true ] ; then
         exec_ninja "out_ios_x86/Profile-iphonesimulator/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Profile.a" "$WEBRTC"/src/out_ios_x86/Profile-iphonesimulator/*.a
+        cp -f "$WEBRTC/src/out_ios_x86/Profile-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Profile.a"
     fi
 
     if [ "$WEBRTC_RELEASE" = true ] ; then
         exec_ninja "out_ios_x86/Release-iphonesimulator/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Release.a" "$WEBRTC"/src/out_ios_x86/Release-iphonesimulator/*.a
+        cp -f "$WEBRTC/src/out_ios_x86/Release-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Release.a"
         exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Release.a"
     fi
 }
@@ -372,17 +378,17 @@ function build_apprtc_sim64() {
 
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_x86_64/Debug-iphonesimulator/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Debug.a" "$WEBRTC"/src/out_ios_x86_64/Debug-iphonesimulator/*.a
+        cp -f "$WEBRTC/src/out_ios_x86_64/Debug-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Debug.a"
     fi
 
     if [ "$WEBRTC_PROFILE" = true ] ; then
         exec_ninja "out_ios_x86_64/Profile-iphonesimulator/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Profile.a" "$WEBRTC"/src/out_ios_x86_64/Profile-iphonesimulator/*.a
+        cp -f "$WEBRTC/src/out_ios_x86_64/Profile-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Profile.a"
     fi
 
     if [ "$WEBRTC_RELEASE" = true ] ; then
         exec_ninja "out_ios_x86_64/Release-iphonesimulator/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Release.a" "$WEBRTC"/src/out_ios_x86_64/Release-iphonesimulator/*.a
+        cp -f "$WEBRTC/src/out_ios_x86_64/Release-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Release.a"
         exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-Release.a"
     fi
 }
@@ -396,17 +402,17 @@ function build_apprtc() {
 
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_armeabi_v7a/Debug-iphoneos/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Debug.a" "$WEBRTC"/src/out_ios_armeabi_v7a/Debug-iphoneos/*.a
+        cp -f "$WEBRTC/src/out_ios_armeabi_v7a/Debug-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Debug.a"
     fi
 
     if [ "$WEBRTC_PROFILE" = true ] ; then
         exec_ninja "out_ios_armeabi_v7a/Profile-iphoneos/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Profile.a" "$WEBRTC"/src/out_ios_armeabi_v7a/Profile-iphoneos/*.a
+        cp -f "$WEBRTC/src/out_ios_armeabi_v7a/Profile-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Profile.a"
     fi
 
     if [ "$WEBRTC_RELEASE" = true ] ; then
         exec_ninja "out_ios_armeabi_v7a/Release-iphoneos/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Release.a" "$WEBRTC"/src/out_ios_armeabi_v7a/Release-iphoneos/*.a
+        cp -f "$WEBRTC/src/out_ios_armeabi_v7a/Release-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Release.a"
         exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Release.a"
     fi
 }
@@ -421,17 +427,17 @@ function build_apprtc_arm64() {
 
     if [ "$WEBRTC_DEBUG" = true ] ; then
         exec_ninja "out_ios_arm64_v8a/Debug-iphoneos/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Debug.a" "$WEBRTC"/src/out_ios_arm64_v8a/Debug-iphoneos/*.a
+        cp -f "$WEBRTC/src/out_ios_arm64_v8a/Debug-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Debug.a"
     fi
 
     if [ "$WEBRTC_PROFILE" = true ] ; then
         exec_ninja "out_ios_arm64_v8a/Profile-iphoneos/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Profile.a" "$WEBRTC"/src/out_ios_arm64_v8a/Profile-iphoneos/*.a
+        cp -f "$WEBRTC/src/out_ios_arm64_v8a/Profile-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Profile.a"
     fi
 
     if [ "$WEBRTC_RELEASE" = true ] ; then
         exec_ninja "out_ios_arm64_v8a/Release-iphoneos/"
-        exec_libtool "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Release.a" "$WEBRTC"/src/out_ios_arm64_v8a/Release-iphoneos/*.a
+        cp -f "$WEBRTC/src/out_ios_arm64_v8a/Release-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Release.a"
         exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-Release.a"
     fi
 }
@@ -644,6 +650,12 @@ function dance() {
 
     if [ "$BUILD_DEBUG" = true ] ; then
         WEBRTC_DEBUG=true
+    fi
+
+    GLOBAL_GN_ARGS=$GN_ARGS
+
+    if [[ $WEBRTC_USE_OPENSSL = true ]]; then
+        GLOBAL_GN_ARGS="$GLOBAL_GN_ARGS rtc_build_ssl=false rtc_ssl_root=\"$WEBRTC_OPENSSL_ROOT\""
     fi
 
     get_webrtc $@
