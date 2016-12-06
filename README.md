@@ -58,11 +58,11 @@ Make sure you label your new binaries that are generated in
 ./webrtc-build-scripts/ios/webrtc/libWebRTC_builds 
 ```
 
-###### Requirements
+#### Requirements
 A fast internet connection.... for your own sanity
 
 
-###### Versioning
+#### Versioning
 
 The versioning can be explained as follows:
 
