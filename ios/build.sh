@@ -292,14 +292,15 @@ function patch_configs() {
     perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/import(\"\/\/webrtc\/build\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
     
     perl -0777 -pi -e "s/\"\/\/third_party\/boringssl\:boringssl\",?//sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
-    perl -0777 -pi -e "s/(if\s*\(use_srtp_boringssl\)\s*{)(?=\s*defines)/\1\ninclude_dirs += [ rtc_ssl_root ]/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
+    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[[^]]+\])/\1\ninclude_dirs += [ rtc_ssl_root ]/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
     perl -0777 -pi -e "s/(declare_args\(\))/import(\"\/\/webrtc\/build\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
 function copy_headers() {
+    create_directory_if_not_found "$BUILD"
+
     if [ ! -h "$WEBRTC/headers" ]; then
-        create_directory_if_not_found "$BUILD"
         ln -s "$WEBRTC/src/webrtc/sdk/objc/Framework/Headers" "$WEBRTC/headers" || true
     fi
 }
