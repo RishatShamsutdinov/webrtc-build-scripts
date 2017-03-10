@@ -8,13 +8,24 @@
 
 set -e
 
-# Get location of the script itself .. thanks SO ! http://stackoverflow.com/a/246128
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-    DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-done
+function resolve_link() {
+    local path="$1"
+
+    # resolve symlinks
+    while [ -h $path ]; do
+        # 1) cd to directory of the symlink
+        # 2) cd to the directory of where the symlink points
+        # 3) get the pwd
+        # 4) append the basename
+        local dir=$(dirname -- "$path")
+        local sym=$(readlink $path)
+        path=$(cd $dir && cd $(dirname -- "$sym") && pwd)/$(basename -- "$sym")
+    done
+
+    echo "$path"
+}
+
+SOURCE=`resolve_link "${BASH_SOURCE[0]}"`
 PROJECT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
 DEFAULT_WEBRTC_URL="https://chromium.googlesource.com/external/webrtc"
@@ -619,10 +630,13 @@ function create_ios_framework() {
 function create_ios_framework_for_configuration () {
     CONFIGURATION=$1
 
+    local headers_path=`resolve_link "$WEBRTC/headers"`
+    local binary_path=`resolve_link "$WEBRTC/libWebRTC-LATEST-Universal-$CONFIGURATION.a"`
+
     rm -rf "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework"
     mkdir -p "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework/Versions/A/Headers"
-    cp "$WEBRTC"/src/talk/app/webrtc/objc/public/*.h "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework/Versions/A/Headers"
-    cp "$WEBRTC/libWebRTC-LATEST-Universal-$CONFIGURATION.a" "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework/Versions/A/WebRTC"
+    cp -p $(find "$headers_path" -name "*.h") "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework/Versions/A/Headers"
+    cp "$binary_path" "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework/Versions/A/WebRTC"
 
     WEBRTC_REVISION=`get_revision_number`
     echo $WEBRTC_REVISION >> "$WEBRTC/Framework/$CONFIGURATION/WebRTC.framework/Version.txt"
