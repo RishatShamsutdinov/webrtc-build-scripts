@@ -293,18 +293,17 @@ function patch_files () {
 
 function patch_opensslstreamadapter() {
     perl -pi -e 's/(#ifndef OPENSSL_IS_BORINGSSL\n)/\1#include <openssl\/ssl.h>\n/s' "$WEBRTC/src/webrtc/base/opensslstreamadapter.cc"
+    perl -pi -e 's/(for \()(size_t)( i = 0; i < sk_GENERAL_NAME_num\(names\); i\+\+\))/\1int\3/s' "$WEBRTC/src/webrtc/base/openssladapter.cc"
 }
 
 function patch_configs() {
-    perl -0777 -pi -e "s/(\s*rtc_static_library\(\"$WEBRTC_TARGET\"\)\s*{)/\1\nconfigs += [\"\/\/webrtc\/base:openssl_config\"]/sg" "$WEBRTC/src/webrtc/sdk/BUILD.gn"
-    
     perl -0777 -pi -e "s/(deps\s*=\s*\[\s*\"\/\/third_party\/boringssl\",?\s*\])//sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
     perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/\1\nrtc_ssl_root,/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
-    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/import(\"\/\/webrtc\/build\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
+    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/import(\"\/\/webrtc\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
     
     perl -0777 -pi -e "s/\"\/\/third_party\/boringssl\:boringssl\",?//sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
     perl -0777 -pi -e "s/(include_dirs\s*=\s*\[[^]]+\])/\1\ninclude_dirs += [ rtc_ssl_root ]/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
-    perl -0777 -pi -e "s/(declare_args\(\))/import(\"\/\/webrtc\/build\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
+    perl -0777 -pi -e "s/(declare_args\(\))/import(\"\/\/webrtc\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
