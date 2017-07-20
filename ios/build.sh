@@ -262,19 +262,19 @@ function sync() {
     choose_code_signing
 
     cd "$WEBRTC/src"
-    
-    gclient revert
 
-    local commit=`git log --grep="master@{#$1}" | grep -oE 'commit .+' | sed -e 's/commit //'`
-    
-    cd -
-
-    if [ -z $1 ]
-    then
-        gclient sync --with_branch_heads
-    else
-        gclient sync -r "$commit" --with_branch_heads
+    if [ -d '.git' ]; then
+        gclient revert
     fi
+
+    gclient sync --with_branch_heads
+
+    git fetch origin "refs/branch-heads/$1"
+    git checkout FETCH_HEAD
+
+    gclient sync --jobs 16
+
+    cd -
 
     if [ "$WEBRTC_TARGET" == "rtc_sdk_objc" ] ; then
         patch_files
