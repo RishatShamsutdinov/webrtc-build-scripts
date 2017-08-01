@@ -47,7 +47,7 @@ function create_directory_if_not_found() {
 
 function exec_strip() {
   echo "Running strip"
-  strip -S -X $@
+  strip -S -X "$@"
 }
 
 function exec_ninja() {
