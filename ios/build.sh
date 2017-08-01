@@ -47,7 +47,7 @@ function create_directory_if_not_found() {
 
 function exec_strip() {
   echo "Running strip"
-  strip -S -X "$@"
+  strip -S -X "'$@'"
 }
 
 function exec_ninja() {
@@ -178,7 +178,12 @@ function get_revision_number() {
     DIR=`pwd`
     cd "$WEBRTC/src"
 
-    REVISION_NUMBER=`git log -1 | grep 'Cr-Commit-Position: refs/heads/master@{#' | grep -v '>' | egrep -o "[0-9]+}" | tr -d '}'`
+    REVISION_NUMBER=`git log -1 | grep "Cr-Commit-Position: refs/branch-heads/$BRANCH@{#" | grep -v '>' | egrep -o "[0-9]+" | awk 'NR%2{printf $0"-";next;}1'`
+
+    if [ -z "$REVISION_NUMBER" ]
+    then
+        REVISION_NUMBER=`git log -1 | grep "Cr-Commit-Position: refs/heads/master@{#" | grep -v '>' | egrep -o "[0-9]+}" | tr -d '}'`
+    fi
 
     if [ -z "$REVISION_NUMBER" ]
     then
@@ -670,6 +675,12 @@ function dance() {
 
     if [[ $WEBRTC_USE_OPENSSL = true ]]; then
         GLOBAL_GN_ARGS="$GLOBAL_GN_ARGS rtc_build_ssl=false rtc_ssl_root=\"$WEBRTC_OPENSSL_ROOT\""
+    fi
+
+    BRANCH=$@
+
+    if [ -z $BRANCH ]; then
+        BRANCH='master'
     fi
 
     get_webrtc $@
