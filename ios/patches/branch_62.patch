@@ -1,0 +1,65 @@
+diff --git a/webrtc/rtc_base/openssladapter.cc b/webrtc/rtc_base/openssladapter.cc
+index 916425869..8c4ac8962 100644
+--- a/webrtc/rtc_base/openssladapter.cc
++++ b/webrtc/rtc_base/openssladapter.cc
+@@ -294,8 +294,10 @@ OpenSSLAdapter::OpenSSLAdapter(AsyncSocket* socket,
+   if (factory_) {
+     ssl_ctx_ = factory_->ssl_ctx();
+     RTC_DCHECK(ssl_ctx_);
++#ifdef OPENSSL_IS_BORINGSSL
+     // Note: if using OpenSSL, requires version 1.1.0 or later.
+     SSL_CTX_up_ref(ssl_ctx_);
++#endif
+   }
+ }
+ 
+@@ -433,8 +435,10 @@ int OpenSSLAdapter::BeginSSL() {
+   }
+ 
+   // Set a couple common TLS extensions; even though we don't use them yet.
+-  SSL_enable_ocsp_stapling(ssl_);
+-  SSL_enable_signed_cert_timestamps(ssl_);
++#ifdef OPENSSL_IS_BORINGSSL
++    SSL_enable_ocsp_stapling(ssl_);
++    SSL_enable_signed_cert_timestamps(ssl_);
++#endif
+ 
+   if (!alpn_protocols_.empty()) {
+     std::string tls_alpn_string = TransformAlpnProtocols(alpn_protocols_);
+@@ -541,7 +545,12 @@ void OpenSSLAdapter::Cleanup() {
+   }
+ 
+   if (ssl_ctx_) {
+-    SSL_CTX_free(ssl_ctx_);
++#ifndef OPENSSL_IS_BORINGSSL
++    if (!factory_)
++#endif
++    {
++        SSL_CTX_free(ssl_ctx_);
++    }
+     ssl_ctx_ = nullptr;
+   }
+   identity_.reset();
+@@ -903,7 +912,7 @@ bool OpenSSLAdapter::VerifyServerName(SSL* ssl, const char* host,
+   GENERAL_NAMES* names = reinterpret_cast<GENERAL_NAMES*>(
+       X509_get_ext_d2i(certificate, NID_subject_alt_name, nullptr, nullptr));
+   if (names) {
+-    for (size_t i = 0; i < sk_GENERAL_NAME_num(names); i++) {
++    for (int i = 0; i < sk_GENERAL_NAME_num(names); i++) {
+       const GENERAL_NAME* name = sk_GENERAL_NAME_value(names, i);
+       if (name->type != GEN_DNS)
+         continue;
+diff --git a/webrtc/rtc_base/opensslstreamadapter.cc b/webrtc/rtc_base/opensslstreamadapter.cc
+index 53f35fc80..6bff78fc4 100644
+--- a/webrtc/rtc_base/opensslstreamadapter.cc
++++ b/webrtc/rtc_base/opensslstreamadapter.cc
+@@ -17,8 +17,8 @@
+ #include <openssl/tls1.h>
+ #include <openssl/x509v3.h>
+ #ifndef OPENSSL_IS_BORINGSSL
+-#include <openssl/dtls1.h>
+ #include <openssl/ssl.h>
++#include <openssl/dtls1.h>
+ #endif
+ 
+ #include <memory>

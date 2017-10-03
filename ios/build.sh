@@ -266,6 +266,12 @@ function sync() {
     cd "$WEBRTC"
     choose_code_signing
 
+    local buggy_third_party="$WEBRTC/src/third_party/gflags"
+
+    if [ -d "$buggy_third_party" ]; then
+        rm -rf "$buggy_third_party"
+    fi
+
     cd "$WEBRTC/src"
 
     if [ -d '.git' ]; then
@@ -289,16 +295,15 @@ function sync() {
 function patch_files () {
     echo "Patching files"
 
-    patch_opensslstreamadapter
+    cd "$WEBRTC/src"
+
+    git apply "$PATCH_PATH"
+
+    cd -
 
     if [[ $WEBRTC_USE_OPENSSL = true ]]; then
         patch_configs
     fi
-}
-
-function patch_opensslstreamadapter() {
-    perl -pi -e 's/(#ifndef OPENSSL_IS_BORINGSSL\n)/\1#include <openssl\/ssl.h>\n/s' "$WEBRTC/src/webrtc/base/opensslstreamadapter.cc"
-    perl -pi -e 's/(for \()(size_t)( i = 0; i < sk_GENERAL_NAME_num\(names\); i\+\+\))/\1int\3/s' "$WEBRTC/src/webrtc/base/openssladapter.cc"
 }
 
 function patch_configs() {
@@ -680,8 +685,11 @@ function dance() {
     BRANCH=$@
 
     if [ -z $BRANCH ]; then
-        BRANCH='master'
+        echo 'Branch is not specified' >&2 
+        exit -1
     fi
+
+    PATCH_PATH="$PROJECT_DIR/patches/branch_$BRANCH.patch"
 
     get_webrtc $@
     build_webrtc
