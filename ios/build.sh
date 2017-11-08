@@ -36,7 +36,7 @@ BUILD="$WEBRTC/libWebRTC_builds"
 WEBRTC_TARGET="rtc_sdk_objc"
 MAC_SDK="10.11"
 SHOULD_PULL_TOOLS=true
-OUT_LIB_REL_PATH="obj/webrtc/sdk/lib$WEBRTC_TARGET.a"
+OUT_LIB_REL_PATH="obj/sdk/lib$WEBRTC_TARGET.a"
 
 function create_directory_if_not_found() {
     if [ ! -d "$1" ];
@@ -309,11 +309,11 @@ function patch_files () {
 function patch_configs() {
     perl -0777 -pi -e "s/(deps\s*=\s*\[\s*\"\/\/third_party\/boringssl\",?\s*\])//sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
     perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/\1\nrtc_ssl_root,/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
-    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/import(\"\/\/webrtc\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
+    perl -0777 -pi -e "s/(include_dirs\s*=\s*\[)/import(\"\/\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/usrsctp/BUILD.gn"
     
     perl -0777 -pi -e "s/\"\/\/third_party\/boringssl\:boringssl\",?//sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
     perl -0777 -pi -e "s/(include_dirs\s*=\s*\[[^]]+\])/\1\ninclude_dirs += [ rtc_ssl_root ]/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
-    perl -0777 -pi -e "s/(declare_args\(\))/import(\"\/\/webrtc\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
+    perl -0777 -pi -e "s/(declare_args\(\))/import(\"\/\/webrtc.gni\")\n\n\1/sg" "$WEBRTC/src/third_party/libsrtp/BUILD.gn"
 }
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
@@ -321,7 +321,7 @@ function copy_headers() {
     create_directory_if_not_found "$BUILD"
 
     if [ ! -h "$WEBRTC/headers" ]; then
-        ln -s "$WEBRTC/src/webrtc/sdk/objc/Framework/Headers" "$WEBRTC/headers" || true
+        ln -s "$WEBRTC/src/sdk/objc/Framework/Headers" "$WEBRTC/headers" || true
     fi
 }
 
