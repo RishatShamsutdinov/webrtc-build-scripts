@@ -1,8 +1,8 @@
 diff --git a/rtc_base/openssladapter.cc b/rtc_base/openssladapter.cc
-index 916425869..8c4ac8962 100644
+index f0ecf0979..92ccd1fe2 100644
 --- a/rtc_base/openssladapter.cc
 +++ b/rtc_base/openssladapter.cc
-@@ -294,8 +294,10 @@ OpenSSLAdapter::OpenSSLAdapter(AsyncSocket* socket,
+@@ -295,8 +295,10 @@ OpenSSLAdapter::OpenSSLAdapter(AsyncSocket* socket,
    if (factory_) {
      ssl_ctx_ = factory_->ssl_ctx();
      RTC_DCHECK(ssl_ctx_);
@@ -13,7 +13,21 @@ index 916425869..8c4ac8962 100644
    }
  }
  
-@@ -433,8 +435,10 @@ int OpenSSLAdapter::BeginSSL() {
+@@ -387,7 +389,12 @@ int OpenSSLAdapter::BeginSSL() {
+   }
+ 
+   if (identity_ && !identity_->ConfigureIdentity(ssl_ctx_)) {
+-    SSL_CTX_free(ssl_ctx_);
++#ifndef OPENSSL_IS_BORINGSSL
++    if (!factory_)
++#endif
++    {
++      SSL_CTX_free(ssl_ctx_);
++    }
+     err = -1;
+     goto ssl_error;
+   }
+@@ -438,8 +445,10 @@ int OpenSSLAdapter::BeginSSL() {
    }
  
    // Set a couple common TLS extensions; even though we don't use them yet.
@@ -26,7 +40,7 @@ index 916425869..8c4ac8962 100644
  
    if (!alpn_protocols_.empty()) {
      std::string tls_alpn_string = TransformAlpnProtocols(alpn_protocols_);
-@@ -541,7 +545,12 @@ void OpenSSLAdapter::Cleanup() {
+@@ -550,7 +559,12 @@ void OpenSSLAdapter::Cleanup() {
    }
  
    if (ssl_ctx_) {
@@ -40,7 +54,7 @@ index 916425869..8c4ac8962 100644
      ssl_ctx_ = nullptr;
    }
    identity_.reset();
-@@ -903,7 +912,7 @@ bool OpenSSLAdapter::VerifyServerName(SSL* ssl, const char* host,
+@@ -912,7 +926,7 @@ bool OpenSSLAdapter::VerifyServerName(SSL* ssl, const char* host,
    GENERAL_NAMES* names = reinterpret_cast<GENERAL_NAMES*>(
        X509_get_ext_d2i(certificate, NID_subject_alt_name, nullptr, nullptr));
    if (names) {
@@ -50,7 +64,7 @@ index 916425869..8c4ac8962 100644
        if (name->type != GEN_DNS)
          continue;
 diff --git a/rtc_base/opensslstreamadapter.cc b/rtc_base/opensslstreamadapter.cc
-index 53f35fc80..6bff78fc4 100644
+index ec9f238a5..acd537158 100644
 --- a/rtc_base/opensslstreamadapter.cc
 +++ b/rtc_base/opensslstreamadapter.cc
 @@ -17,8 +17,8 @@
