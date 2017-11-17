@@ -295,13 +295,13 @@ function sync() {
 function patch_files () {
     echo "Patching files"
 
-    cd "$WEBRTC/src"
-
-    git apply "$PATCH_PATH"
-
-    cd -
-
     if [[ $WEBRTC_USE_OPENSSL = true ]]; then
+        cd "$WEBRTC/src"
+
+        git apply "$PATCH_PATH"
+
+        cd -
+
         patch_configs
     fi
 }
