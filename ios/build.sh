@@ -304,6 +304,10 @@ function patch_files () {
 
         patch_configs
     fi
+
+    if [ ! -z "$SSL_ROOTS_PATCH" ]; then
+        patch -p1 "$WEBRTC/src/rtc_base/sslroots.h" "$SSL_ROOTS_PATCH"
+    fi
 }
 
 function patch_configs() {
