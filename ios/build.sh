@@ -33,7 +33,8 @@ DEFAULT_POD_URL="https://s3.amazonaws.com/libjingle"
 WEBRTC="$PROJECT_DIR/webrtc"
 DEPOT_TOOLS="$PROJECT_DIR/depot_tools"
 BUILD="$WEBRTC/libWebRTC_builds"
-WEBRTC_TARGET="rtc_sdk_objc"
+WEBRTC_IOS_TARGET="rtc_sdk_objc_ios"
+WEBRTC_TARGET="$WEBRTC_IOS_TARGET"
 MAC_SDK="10.11"
 SHOULD_PULL_TOOLS=true
 OUT_LIB_REL_PATH="obj/sdk/lib$WEBRTC_TARGET.a"
@@ -287,7 +288,7 @@ function sync() {
 
     cd -
 
-    if [ "$WEBRTC_TARGET" == "rtc_sdk_objc" ] ; then
+    if [ "$WEBRTC_TARGET" == "$WEBRTC_IOS_TARGET" ] ; then
         patch_files
     fi
 }
@@ -295,13 +296,15 @@ function sync() {
 function patch_files () {
     echo "Patching files"
 
-    if [[ $WEBRTC_USE_OPENSSL = true ]]; then
+    if [ ! -z "$PATCH_PATH" ]; then
         cd "$WEBRTC/src"
 
         git apply "$PATCH_PATH"
 
         cd -
+    fi
 
+    if [[ $WEBRTC_USE_OPENSSL = true ]]; then
         patch_configs
     fi
 
@@ -694,6 +697,10 @@ function dance() {
     fi
 
     PATCH_PATH="$PROJECT_DIR/patches/branch_$BRANCH.patch"
+
+    if [ ! -f "$PATCH_PATH" ]; then
+        unset PATCH_PATH
+    fi
 
     get_webrtc $@
     build_webrtc
