@@ -1,0 +1,43 @@
+diff --git a/sdk/BUILD.gn b/sdk/BUILD.gn
+index c2263f676c..7af0a0e366 100644
+--- a/sdk/BUILD.gn
++++ b/sdk/BUILD.gn
+@@ -1117,6 +1117,38 @@ if (is_ios || is_mac) {
+           configs -= [ "//build/config/clang:find_bad_constructs" ]
+         }
+       }
++
++      rtc_static_library("rtc_sdk_objc_ios") {
++        complete_static_lib = true
++
++        deps = [
++          ":audio_objc",
++          ":common_objc",
++          ":default_codec_factory_objc",
++          ":native_api",
++          ":native_video",
++          ":peerconnectionfactory_base_objc",
++          ":ui_objc",
++          ":videocapture_objc",
++          ":videocodec_objc",
++          ":videotoolbox_objc",
++          "../rtc_base:rtc_base_approved",
++          "../system_wrappers:field_trial_default",
++          "../system_wrappers:metrics_default",
++          "../system_wrappers:runtime_enabled_features_default",
++        ]
++
++        if (rtc_use_metal_rendering) {
++          deps += [ ":metal_objc" ]
++        }
++
++        configs += [
++          "..:common_objc",
++          ":used_from_extension",
++        ]
++
++        public_configs = [ ":common_config_objc" ]
++      }
+     }
+ 
+     rtc_static_library("wrapped_native_codec_objc") {
