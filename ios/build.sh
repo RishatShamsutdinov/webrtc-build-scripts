@@ -325,11 +325,26 @@ function patch_configs() {
 
 # Convenience function to copy the headers by creating a symbolic link to the headers directory deep within webrtc src
 function copy_headers() {
-    create_directory_if_not_found "$BUILD"
+    local out_dir="$1"
+    local headers_dir="$WEBRTC/headers/WebRTC"
 
-    if [ ! -h "$WEBRTC/headers" ]; then
-        ln -s "$WEBRTC/src/sdk/objc/Framework/Headers" "$WEBRTC/headers" || true
+    if [ -h "$WEBRTC/headers" ]; then
+        rm "$WEBRTC/headers"
     fi
+
+    if [ -d "$headers_dir" ]; then
+        rm -r "$headers_dir"
+    fi
+
+    create_directory_if_not_found "$BUILD"
+    create_directory_if_not_found "$headers_dir"
+
+    local headers_list_file="$out_dir/gen/sdk/headers_list.txt"
+
+    while read line
+    do
+        cp -f "$WEBRTC/src/sdk/$line" "$headers_dir/$(basename $line)"
+    done < "$headers_list_file"
 }
 
 function build_webrtc_mac() {
@@ -342,8 +357,6 @@ function build_webrtc_mac() {
       export MACOSX_DEPLOYMENT_TARGET="$MAC_SDK"
 
       choose_code_signing
-
-      copy_headers
 
       WEBRTC_REVISION=`get_revision_number`
       if [ "$WEBRTC_DEBUG" = true ] ; then
@@ -368,7 +381,6 @@ function build_webrtc_mac() {
 
 function prepare_for_ios_build() {
     choose_code_signing
-    copy_headers
 
     WEBRTC_REVISION=`get_revision_number`
 }
@@ -428,21 +440,31 @@ function build_apprtc() {
     wrios_armv7
     prepare_for_ios_build
 
+    local base_out_dir='out_ios_armeabi_v7a'
+    local build_type='Release'
+
     if [ "$WEBRTC_DEBUG" = true ] ; then
-        exec_ninja "out_ios_armeabi_v7a/Debug-iphoneos/"
-        cp -f "$WEBRTC/src/out_ios_armeabi_v7a/Debug-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Debug.a"
+        build_type='Debug'
     fi
 
     if [ "$WEBRTC_PROFILE" = true ] ; then
-        exec_ninja "out_ios_armeabi_v7a/Profile-iphoneos/"
-        cp -f "$WEBRTC/src/out_ios_armeabi_v7a/Profile-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Profile.a"
+        build_type="Profile"
     fi
 
     if [ "$WEBRTC_RELEASE" = true ] ; then
-        exec_ninja "out_ios_armeabi_v7a/Release-iphoneos/"
-        cp -f "$WEBRTC/src/out_ios_armeabi_v7a/Release-iphoneos/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Release.a"
-        exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-Release.a"
+        build_type="Release"
     fi
+
+    local out_dir="$base_out_dir/$build_type-iphoneos"
+
+    exec_ninja "$out_dir"
+    cp -f "$WEBRTC/src/$out_dir/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-$build_type.a"
+
+    if [ "$WEBRTC_RELEASE" = true ] ; then
+        exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-$build_type.a"
+    fi
+
+    copy_headers "$WEBRTC/src/$out_dir"
 }
 
 
