@@ -81,14 +81,6 @@ function pull_depot_tools() {
 
             echo Pull the depot tools project from chromium source into the depot tools directory
             git clone "https://chromium.googlesource.com/chromium/tools/depot_tools.git" "$DEPOT_TOOLS"
-
-        else
-
-            echo Change directory into the depot tools
-            cd "$DEPOT_TOOLS"
-
-            echo Pull the depot tools down to the latest
-            git pull
         fi
         PATH="$PATH:$DEPOT_TOOLS"
         echo "Go back to working directory"
@@ -264,10 +256,11 @@ function clone() {
 # Fire the sync command. Accepts an argument as the revision number that you want to sync to
 function sync() {
     pull_depot_tools
+    DIR=`pwd`
     cd "$WEBRTC"
     choose_code_signing
 
-    local buggy_third_party="$WEBRTC/src/third_party/gflags"
+    local buggy_third_party="$WEBRTC/src/third_party/harfbuzz-ng"
 
     if [ -d "$buggy_third_party" ]; then
         rm -rf "$buggy_third_party"
@@ -279,14 +272,16 @@ function sync() {
         gclient revert
     fi
 
-    gclient sync --with_branch_heads
-
     git fetch origin "refs/branch-heads/$1"
     git checkout FETCH_HEAD
 
-    gclient sync --jobs 16
+    gclient sync --jobs 16 --delete_unversioned_trees
 
-    cd -
+    pushd "$WEBRTC/src/buildtools"
+    (PYTHONDONTWRITEBYTECODE=1 exec python 'ensure_gn_version.py' 'git_revision:97cc440d84f050f99ff0161f9414bfa2ffa38f65')
+    popd
+
+    cd $DIR
 
     if [ "$WEBRTC_TARGET" == "$WEBRTC_IOS_TARGET" ] ; then
         patch_files
@@ -297,11 +292,12 @@ function patch_files () {
     echo "Patching files"
 
     if [ ! -z "$PATCH_PATH" ]; then
+        DIR=`pwd`
         cd "$WEBRTC/src"
 
         git apply "$PATCH_PATH"
 
-        cd -
+        cd $DIR
     fi
 
     if [[ $WEBRTC_USE_OPENSSL = true ]]; then
@@ -309,7 +305,7 @@ function patch_files () {
     fi
 
     if [ ! -z "$SSL_ROOTS_PATCH" ]; then
-        patch -p1 "$WEBRTC/src/rtc_base/sslroots.h" "$SSL_ROOTS_PATCH"
+        patch -p1 "$WEBRTC/src/rtc_base/ssl_roots.h" "$SSL_ROOTS_PATCH"
     fi
 }
 
