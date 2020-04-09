@@ -141,13 +141,6 @@ function wrios_armv8() {
     export GN_ARGS="$GN_ARGS target_cpu=\"arm64\""
 }
 
-# Add the iOS Simulator X86 specific defines on top of the base
-function wrX86() {
-    wrbase_ios
-
-    export GN_ARGS="$GN_ARGS target_cpu=\"x86\""
-}
-
 # Add the iOS Simulator X64 specific defines on top of the base
 function wrX86_64() {
     wrbase_ios
@@ -381,30 +374,6 @@ function prepare_for_ios_build() {
     WEBRTC_REVISION=`get_revision_number`
 }
 
-# Build AppRTC Demo for the simulator (ia32 architecture)
-function build_apprtc_sim() {
-    cd "$WEBRTC/src"
-
-    wrX86
-    prepare_for_ios_build
-
-    if [ "$WEBRTC_DEBUG" = true ] ; then
-        exec_ninja "out_ios_x86/Debug-iphonesimulator/"
-        cp -f "$WEBRTC/src/out_ios_x86/Debug-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Debug.a"
-    fi
-
-    if [ "$WEBRTC_PROFILE" = true ] ; then
-        exec_ninja "out_ios_x86/Profile-iphonesimulator/"
-        cp -f "$WEBRTC/src/out_ios_x86/Profile-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Profile.a"
-    fi
-
-    if [ "$WEBRTC_RELEASE" = true ] ; then
-        exec_ninja "out_ios_x86/Release-iphonesimulator/"
-        cp -f "$WEBRTC/src/out_ios_x86/Release-iphonesimulator/$OUT_LIB_REL_PATH" "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Release.a"
-        exec_strip "$BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-Release.a"
-    fi
-}
-
 # Build AppRTC Demo for the 64 bit simulator (x86_64 architecture)
 function build_apprtc_sim64() {
     cd "$WEBRTC/src"
@@ -512,8 +481,6 @@ function lipo_for_configuration() {
     LIPO_DIRS="$BUILD/libWebRTC-$WEBRTC_REVISION-ios-armeabi_v7a-$CONFIGURATION.a"
     # Add ARM64
     LIPO_DIRS="$LIPO_DIRS $BUILD/libWebRTC-$WEBRTC_REVISION-ios-arm64_v8a-$CONFIGURATION.a"
-    # Add x86
-    LIPO_DIRS="$LIPO_DIRS $BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86-$CONFIGURATION.a"
     # and add x86_64
     LIPO_DIRS="$LIPO_DIRS $BUILD/libWebRTC-$WEBRTC_REVISION-ios-x86_64-$CONFIGURATION.a"
 
@@ -537,7 +504,6 @@ function lipo_for_configuration() {
 
     # Write the version down to a file
     echo "Architectures Built" >> "$BUILD/libWebRTC-$WEBRTC_REVISION-arm-intel-$CONFIGURATION.a.version.txt"
-    echo "ia32 - Intel x86" >> "$BUILD/libWebRTC-$WEBRTC_REVISION-arm-intel-$CONFIGURATION.a.version.txt"
     echo "ia64 - Intel x86_64" >> "$BUILD/libWebRTC-$WEBRTC_REVISION-arm-intel-$CONFIGURATION.a.version.txt"
     echo "armv7 - Arm x86" >> "$BUILD/libWebRTC-$WEBRTC_REVISION-arm-intel-$CONFIGURATION.a.version.txt"
     echo "arm64_v8a - Arm 64 (armv8)" >> "$BUILD/libWebRTC-$WEBRTC_REVISION-arm-intel-$CONFIGURATION.a.version.txt"
@@ -555,7 +521,6 @@ function build_webrtc() {
     pull_depot_tools
     build_apprtc
     build_apprtc_arm64
-    build_apprtc_sim
     build_apprtc_sim64
     lipo_intel_and_arm
 }
